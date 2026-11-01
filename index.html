@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0f14">
+<title>PixelBoard</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="top">
+    <div class="logo" aria-hidden="true">
+      <i class="on"></i><i></i><i class="on"></i><i></i>
+      <i></i><i class="on"></i><i></i><i class="on"></i>
+      <i class="on"></i><i></i><i class="on"></i><i></i>
+      <i></i><i class="on"></i><i></i><i class="on"></i>
+    </div>
+    <h1>PixelBoard</h1>
+    <button class="status" id="statusBtn" title="Verbinden/Trennen">
+      <span class="dot" id="dot"></span><span id="statusText">Verbinden</span>
+    </button>
+  </div>
+  <div id="galleryHeader">
+    <div class="chips" id="chips"></div>
+    <div class="searchrow">
+      <input class="search" id="search" type="search" placeholder="Suchen … (z. B. cat, fire, heart)" autocomplete="off">
+      <button class="iconbtn" id="uploadBtn" title="Eigene Datei hinzufügen">＋</button>
+      <input type="file" id="fileInput" accept="image/*" multiple hidden>
+    </div>
+  </div>
+</header>
+
+<div class="banner" id="btBanner" hidden>
+  <b>Web Bluetooth nicht verfügbar.</b> Öffne die Seite in <b>Chrome</b> auf Android über
+  <b>https://</b> (z. B. GitHub Pages). Stöbern funktioniert trotzdem.
+</div>
+
+<main id="galleryPanel">
+  <div class="meta"><span id="count"></span><a id="license" target="_blank" rel="noopener"></a></div>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" hidden></div>
+  <div id="sentinel"></div>
+</main>
+
+<section class="panel" id="textPanel">
+  <div class="card">
+    <h3>Text anzeigen</h3>
+    <input class="input" id="txt" placeholder="Hallo Lünscheid! 👋" maxlength="200">
+    <div class="textpreview"><canvas id="txtPreview" width="1" height="32"></canvas></div>
+    <label class="field">Farbe &amp; Animation</label>
+    <div class="row">
+      <input type="color" id="txtColor" value="#ffb020">
+      <select class="input" id="txtAnim">
+        <option value="0">Statisch</option>
+        <option value="1" selected>Lauftext ←</option>
+        <option value="2">Lauftext →</option>
+        <option value="3">Nach oben</option>
+        <option value="4">Nach unten</option>
+        <option value="5">Blinken</option>
+        <option value="6">Atmen</option>
+        <option value="7">Schneeflocken</option>
+      </select>
+    </div>
+    <label class="field">Schrift</label>
+    <select class="input" id="txtFont">
+      <option value="bold 26px system-ui, sans-serif">Fett</option>
+      <option value="24px system-ui, sans-serif">Normal</option>
+      <option value="bold 24px ui-monospace, monospace">Monospace</option>
+      <option value="bold 28px Georgia, serif">Serif</option>
+    </select>
+    <label class="field">Regenbogen</label>
+    <select class="input" id="txtRainbow">
+      <option value="0">Aus</option>
+      <option value="1">Modus 1</option><option value="2">Modus 2</option><option value="3">Modus 3</option>
+      <option value="4">Modus 4</option><option value="5">Modus 5</option>
+    </select>
+    <label class="field">Geschwindigkeit</label>
+    <div class="row"><input type="range" id="txtSpeed" min="0" max="100" value="80"><span class="val" id="txtSpeedVal">80</span></div>
+    <div class="actions"><button class="btn primary" id="txtSend">Aufs Board</button></div>
+  </div>
+</section>
+
+<section class="panel" id="ctrlPanel">
+  <div class="card">
+    <h3>Helligkeit</h3>
+    <div class="row"><input type="range" id="bright" min="1" max="100" value="60"><span class="val" id="brightVal">60%</span></div>
+  </div>
+  <div class="card">
+    <h3>Board</h3>
+    <div class="pill-row">
+      <button class="btn" data-power="1">Ein</button>
+      <button class="btn" data-power="0">Aus</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Uhr</h3>
+    <div class="pill-row" id="clockBtns"></div>
+    <label class="field"><input type="checkbox" id="clockDate"> Datum anzeigen</label>
+  </div>
+  <div class="card">
+    <h3>Verbindung</h3>
+    <p class="small" style="margin:0 0 12px">
+      Solange PixelBoard verbunden ist, kommt die iPixel-App nicht ans Board.
+      Nach einigen Minuten ohne Aktion trennt PixelBoard automatisch.
+    </p>
+    <div class="pill-row">
+      <button class="btn" id="connBtn">Verbinden</button>
+      <button class="btn" id="discBtn">Trennen</button>
+    </div>
+    <p class="small mono" id="connInfo" style="margin:12px 0 0"></p>
+  </div>
+  <details class="card">
+    <summary>Erweitert</summary>
+    <label class="field">Paketgröße (bei Übertragungsfehlern verkleinern)</label>
+    <select class="input" id="chunkSize">
+      <option value="244">244 Byte (Standard)</option>
+      <option value="180">180 Byte</option>
+      <option value="128">128 Byte</option>
+      <option value="20">20 Byte (sehr langsam)</option>
+    </select>
+    <label class="field">Automatisch trennen nach</label>
+    <select class="input" id="idleMin">
+      <option value="1">1 Minute</option>
+      <option value="3" selected>3 Minuten</option>
+      <option value="10">10 Minuten</option>
+      <option value="0">nie</option>
+    </select>
+    <label class="field">Max. Frames pro GIF</label>
+    <select class="input" id="maxFrames">
+      <option value="32">32</option>
+      <option value="64" selected>64</option>
+      <option value="100">100</option>
+    </select>
+    <div class="pill-row" style="margin-top:14px">
+      <button class="btn" id="pickBtn">Anderes Board wählen</button>
+      <button class="btn" id="pickAllBtn">Alle BT-Geräte</button>
+    </div>
+  </details>
+  <p class="small" style="text-align:center;margin:18px 0">
+    Protokoll nach <a href="https://github.com/lucagoc/pypixelcolor" target="_blank" rel="noopener" style="color:var(--muted)">pypixelcolor</a> ·
+    GIF-Encoder <a href="https://github.com/mattdesl/gifenc" target="_blank" rel="noopener" style="color:var(--muted)">gifenc</a> (MIT)
+  </p>
+</section>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true">
+  <div class="grab"></div>
+  <div class="preview-wrap">
+    <div class="matrix" id="matrix"><img id="pv" alt=""><div class="spinner" id="pvSpin">lädt …</div></div>
+    <div class="info">
+      <h2 id="pvName"></h2>
+      <small id="pvSrc"></small>
+      <div class="seg" id="fitSeg">
+        <button data-fit="crop" class="active">Füllen</button>
+        <button data-fit="fit">Einpassen</button>
+      </div>
+    </div>
+  </div>
+  <div class="progress" id="progress"><i></i></div>
+  <div class="actions">
+    <button class="btn" id="saveBtn">☆ Merken</button>
+    <button class="btn primary" id="sendBtn">Aufs Board</button>
+  </div>
+</div>
+
+<nav class="tabs">
+  <button data-tab="gallery" class="active"><span>▦</span>Galerie</button>
+  <button data-tab="text"><span>Aa</span>Text</button>
+  <button data-tab="ctrl"><span>◐</span>Steuerung</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
