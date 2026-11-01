@@ -1,0 +1,4 @@
+16x16 DungeonTileset II von 0x72
+https://0x72.itch.io/dungeontileset-ii
+Lizenz: CC0 1.0 (Public Domain) – frei verwendbar, Namensnennung erwünscht.
+Hier nur die Einzelframes (Figuren, Truhen, Münzen, Tränke, Waffen, Herzen), unverändert.

@@ -184,8 +184,10 @@ async function refreshList() {
     updateLibCount(lib.length);
     entries = search(state.q, lib, (it) => [it.name]);
   } else {
-    entries = search(state.q, s.items, (it) => [it[1], it[0]]).map(([rel, name]) => ({
-      id: rel, name, thumb: s.base + rel, anim: rel.toLowerCase().endsWith(".gif"), pixelart: !!s.pixelart,
+    entries = search(state.q, s.items, (it) => [it[1], it[0]]).map(([rel, name, frames]) => ({
+      id: rel, name, thumb: s.base + rel, pixelart: !!s.pixelart, frameMs: s.frame_ms || 100,
+      frames: frames ? frames.map((f) => s.base + f) : null,
+      anim: rel.toLowerCase().endsWith(".gif") || !!(frames && frames.length > 1),
     }));
   }
   state.list = entries;
@@ -239,15 +241,20 @@ $("#fileInput").onchange = async (e) => {
 const blobCache = new Map();
 async function getBlob(it) {
   if (it.blob) return it.blob;
-  if (blobCache.has(it.thumb)) return blobCache.get(it.thumb);
-  const res = await fetch(it.thumb);
+  if (it.frames) return Promise.all(it.frames.map((url) => fetchBlob(url)));
+  return fetchBlob(it.thumb);
+}
+
+async function fetchBlob(url) {
+  if (blobCache.has(url)) return blobCache.get(url);
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`Download fehlgeschlagen (${res.status})`);
   let blob = await res.blob();
-  const ext = it.thumb.split("?")[0].split(".").pop().toLowerCase();
+  const ext = url.split("?")[0].split(".").pop().toLowerCase();
   const mime = { gif: "image/gif", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" }[ext];
   if (mime && blob.type !== mime) blob = new Blob([blob], { type: mime });
-  if (blobCache.size > 40) blobCache.delete(blobCache.keys().next().value);
-  blobCache.set(it.thumb, blob);
+  if (blobCache.size > 80) blobCache.delete(blobCache.keys().next().value);
+  blobCache.set(url, blob);
   return blob;
 }
 
@@ -265,7 +272,7 @@ async function renderPreview() {
     const blob = await getBlob(it);
     const r = await render(blob, {
       width: board.info?.width ?? 32, height: board.info?.height ?? 32,
-      mode: state.fit, pixelart: it.pixelart, maxFrames: settings.get("maxFrames", 64),
+      mode: state.fit, pixelart: it.pixelart, maxFrames: settings.get("maxFrames", 64), frameMs: it.frameMs,
     });
     if (token !== renderToken) return;
     rendered = r;
@@ -339,7 +346,15 @@ $("#saveBtn").onclick = async () => {
     return;
   }
   try {
-    const blob = await getBlob(it);
+    let blob;
+    if (it.frames) {
+      // Einzelframes: das fertige GIF speichern
+      if (!rendered) await renderPreview();
+      if (!rendered) throw new Error("Bild konnte nicht vorbereitet werden");
+      blob = new Blob([rendered.bytes], { type: rendered.mime });
+    } else {
+      blob = await getBlob(it);
+    }
     await db.put({ id: crypto.randomUUID(), name: it.name.split(" · ")[0], blob, added: Date.now() });
     updateLibCount(state.sources.find((s) => s.id === "library").count + 1);
     toast("In „Meine Bibliothek“ gespeichert", "ok");

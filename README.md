@@ -66,6 +66,9 @@ Server ist nicht nötig.
 
 - Bilder: PIXEL LED Art (Al Linke), PIXEL (onebeartoe), SmartMatrix-Beispiele – nur
   privat nutzen. OpenMoji (CC BY-SA 4.0), Twemoji (CC BY 4.0).
+- 16×16: „Dungeon-Helden & Monster“ = 16x16 DungeonTileset II von 0x72 (CC0, Frames liegen
+  in `assets/0x72/`, die App baut daraus GIFs). „Silk-Icons“ = famfamfam Silk von Mark James
+  (CC BY 2.5). Neu erzeugen mit `python tools/add_16px_sources.py`.
 - Das Protokoll ist portiert aus [pypixelcolor](https://github.com/lucagoc/pypixelcolor)
   (MIT), jede Übertragung ist byte-identisch zur Python-Version getestet.
 - GIF-Encoder: [gifenc](https://github.com/mattdesl/gifenc) (MIT, siehe

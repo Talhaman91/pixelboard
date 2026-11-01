@@ -45,8 +45,46 @@ export async function decode(blob) {
   return { frames: [{ src: bmp, duration: 100 }], width: bmp.width, height: bmp.height };
 }
 
+// Mehrere Einzelbilder (z. B. Sprite-Frames) -> wie decode()
+export async function decodeFrames(blobs, frameMs = 100) {
+  const bmps = await Promise.all(blobs.map((b) => createImageBitmap(b)));
+  const width = Math.max(...bmps.map((b) => b.width));
+  const height = Math.max(...bmps.map((b) => b.height));
+  return { frames: bmps.map((b) => ({ src: b, duration: frameMs })), width, height };
+}
+
+// Gemeinsamer Rahmen aller nicht-transparenten Pixel über alle Frames
+function opaqueBounds(frames, w, h) {
+  const c = canvas(w, h);
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (const f of frames) {
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(f.src, 0, 0);
+    const a = ctx.getImageData(0, 0, w, h).data;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (a[(y * w + x) * 4 + 3] > 16) {
+          if (x < x0) x0 = x; if (x > x1) x1 = x;
+          if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+      }
+    }
+  }
+  if (x1 < 0) return null;
+  return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+function cropFrames(frames, r) {
+  return frames.map((f) => {
+    const c = canvas(r.w, r.h);
+    c.getContext("2d").drawImage(f.src, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+    return { src: c, duration: f.duration, orig: f.src };
+  });
+}
+
 export function releaseFrames(decoded) {
-  for (const f of decoded.frames) try { f.src.close(); } catch { /* egal */ }
+  for (const f of decoded.frames) try { (f.orig || f.src).close?.(); } catch { /* egal */ }
 }
 
 // Ein Frame auf w×h bringen (schwarzer Hintergrund wie im Original).
@@ -79,9 +117,17 @@ function renderFrame(src, sw, sh, w, h, mode, pixelart) {
 }
 
 // -> { bytes: Uint8Array, isGif, frames, mime }
-export async function render(blob, { width = 32, height = 32, mode = "crop", pixelart = false, maxFrames = 64 } = {}) {
-  const dec = await decode(blob);
+export async function render(input, { width = 32, height = 32, mode = "crop", pixelart = false, maxFrames = 64, frameMs = 100, trim = pixelart } = {}) {
+  const dec = Array.isArray(input) ? await decodeFrames(input, frameMs) : await decode(input);
   try {
+    if (trim) {
+      const r = opaqueBounds(dec.frames, dec.width, dec.height);
+      // nur bei viel leerem Rand (z. B. 16×28-Figuren), damit 16×16-Icons exakt 2× skaliert bleiben
+      if (r && r.w * r.h < 0.75 * dec.width * dec.height) {
+        dec.frames = cropFrames(dec.frames, r);
+        dec.width = r.w; dec.height = r.h;
+      }
+    }
     let frames = dec.frames;
     let durations = frames.map((f) => Math.max(20, Math.round(f.duration || 100)));
     if (frames.length > maxFrames) {
