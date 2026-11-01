@@ -117,7 +117,7 @@ function renderFrame(src, sw, sh, w, h, mode, pixelart) {
 }
 
 // -> { bytes: Uint8Array, isGif, frames, mime }
-export async function render(input, { width = 32, height = 32, mode = "crop", pixelart = false, maxFrames = 64, frameMs = 100, trim = pixelart } = {}) {
+export async function render(input, { width = 32, height = 32, mode = "crop", pixelart = false, maxFrames = 64, frameMs = 100, trim = pixelart, minFrameMs = 0 } = {}) {
   const dec = Array.isArray(input) ? await decodeFrames(input, frameMs) : await decode(input);
   try {
     if (trim) {
@@ -130,6 +130,15 @@ export async function render(input, { width = 32, height = 32, mode = "crop", pi
     }
     let frames = dec.frames;
     let durations = frames.map((f) => Math.max(20, Math.round(f.duration || 100)));
+    // Bildrate begrenzen: zu schnelle Frames zusammenfassen, Gesamtdauer bleibt gleich
+    if (minFrameMs > 0 && frames.length > 1) {
+      const kf = [], kd = [];
+      frames.forEach((f, i) => {
+        if (kf.length && kd[kd.length - 1] < minFrameMs) kd[kd.length - 1] += durations[i];
+        else { kf.push(f); kd.push(durations[i]); }
+      });
+      frames = kf; durations = kd;
+    }
     if (frames.length > maxFrames) {
       const step = frames.length / maxFrames;
       const idx = Array.from({ length: maxFrames }, (_, i) => Math.floor(i * step));
@@ -154,7 +163,8 @@ export async function render(input, { width = 32, height = 32, mode = "crop", pi
         : { delay: durations[i], dispose: 2 });
     });
     gif.finish();
-    return { bytes: gif.bytes(), isGif: true, frames: frames.length, mime: "image/gif" };
+    const total = durations.reduce((a, b) => a + b, 0);
+    return { bytes: gif.bytes(), isGif: true, frames: frames.length, fps: frames.length / (total / 1000), mime: "image/gif" };
   } finally {
     releaseFrames(dec);
   }

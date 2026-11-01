@@ -138,6 +138,59 @@ async function libraryItems() {
   });
 }
 
+// ---------------------------------------------------------------- Online-Quellen (live gesucht)
+const LAMETRIC_ICON = (id, anim) => `https://developer.lametric.com/content/apps/icon_thumbs/${id}.${anim ? "gif" : "png"}`;
+const REMOTE_SOURCES = [
+  {
+    id: "giphy", name: "GIPHY-Suche", remote: true, pixelart: false, countLabel: "web",
+    license: "Powered by GIPHY", license_url: "https://giphy.com",
+    hint: "Tipp: „pixel art …“ suchen (z. B. pixel art cat). Ohne Suche: Trends.",
+    async page(q, offset) {
+      const key = settings.get("giphyKey", "");
+      if (!key) throw new Error("Für GIPHY bitte unter Steuerung → Erweitert einen kostenlosen API-Key eintragen.");
+      const params = new URLSearchParams({ api_key: key, limit: 48, offset, rating: "g" });
+      if (q) { params.set("q", q); params.set("lang", "de"); }
+      const res = await fetch(`https://api.giphy.com/v1/gifs/${q ? "search" : "trending"}?${params}`);
+      if (res.status === 401 || res.status === 403) throw new Error("GIPHY-Key ungültig");
+      if (!res.ok) throw new Error(`GIPHY-Fehler ${res.status}`);
+      const data = await res.json();
+      const items = (data.data || []).map((g) => {
+        const im = g.images || {};
+        const send = (im.fixed_height_small || im.fixed_height || im.downsized || {}).url;
+        const thumb = (im.fixed_width_small || im.fixed_width || {}).url || send;
+        return send && { id: send, name: g.title || g.id, thumb, anim: true, pixelart: false };
+      }).filter(Boolean);
+      const total = data.pagination?.total_count ?? items.length;
+      return { items, done: offset + items.length >= total || !items.length, total };
+    },
+  },
+  {
+    id: "lametric", name: "LaMetric-Icons (8×8)", remote: true, pixelart: true, trim: false, countLabel: "web",
+    license: "LaMetric-Community-Icons – nur privat nutzen", license_url: "https://developer.lametric.com/icons",
+    hint: "Experimentell. Suche auf Englisch (z. B. heart, fire, cat).",
+    async page(q, offset) {
+      const pageNo = Math.floor(offset / 60);
+      let raw;
+      if (q) {
+        const res = await fetch(`https://developer.lametric.com/api/v1/dev/preloadicons?search=${encodeURIComponent(q)}&count=60&page=${pageNo}`);
+        if (!res.ok) throw new Error(`LaMetric-Fehler ${res.status}`);
+        const d = await res.json();
+        raw = (d.icons || d.Icons || d.data || []).map((i) => ({ id: i.id, title: i.name || i.title, anim: String(i.type) === "1" || i.type === "movie" }));
+      } else {
+        const res = await fetch(`https://developer.lametric.com/api/v2/icons?page=${pageNo}&page_size=60&order=popular&fields=id,title,url,type`);
+        if (!res.ok) throw new Error(`LaMetric-Fehler ${res.status}`);
+        const d = await res.json();
+        raw = (d.data || []).map((i) => ({ id: i.id, title: i.title, anim: i.type === "movie", url: i.url }));
+      }
+      const items = raw.map((i) => {
+        const url = i.url || LAMETRIC_ICON(i.id, i.anim);
+        return { id: url, name: i.title || `Icon ${i.id}`, thumb: url, anim: url.endsWith(".gif"), pixelart: true, trim: false };
+      });
+      return { items, done: items.length < 60 };
+    },
+  },
+];
+
 async function loadSources() {
   const idx = await fetch("sources_index.json").then((r) => r.json());
   const lib = await libraryItems();
@@ -145,12 +198,14 @@ async function loadSources() {
     { id: "library", name: "Meine Bibliothek", license: "eigene Dateien (nur auf diesem Gerät)", license_url: "", count: lib.length },
     ...idx.sources.map((s) => ({ ...s, count: s.items.length })),
   ];
+  const emojiPos = state.sources.findIndex((s) => s.id === "openmoji" || s.id === "twemoji");
+  state.sources.splice(emojiPos < 0 ? state.sources.length : emojiPos, 0, ...REMOTE_SOURCES);
   const chips = $("#chips");
   chips.innerHTML = "";
   for (const s of state.sources) {
     const b = document.createElement("button");
     b.className = "chip"; b.dataset.id = s.id;
-    b.innerHTML = `${esc(s.name)}<b>${s.count}</b>`;
+    b.innerHTML = `${esc(s.name)}<b>${s.countLabel || s.count}</b>`;
     b.onclick = () => selectSource(s.id);
     chips.appendChild(b);
   }
@@ -176,9 +231,19 @@ async function selectSource(id) {
   await refreshList();
 }
 
+let listToken = 0;
 async function refreshList() {
   const s = state.source;
+  const token = ++listToken;
   let entries;
+  if (s.remote) {
+    state.list = []; state.shown = 0; state.remoteOffset = 0; state.remoteDone = false;
+    $("#grid").innerHTML = "";
+    $("#count").textContent = s.hint || "";
+    $("#empty").hidden = true;
+    await loadRemote(token);
+    return;
+  }
   if (s.id === "library") {
     const lib = await libraryItems();
     updateLibCount(lib.length);
@@ -202,7 +267,7 @@ async function refreshList() {
 }
 
 function showMore() {
-  const next = state.list.slice(state.shown, state.shown + PAGE);
+  const next = state.list.slice(state.shown, state.source?.remote ? state.list.length : state.shown + PAGE);
   const frag = document.createDocumentFragment();
   for (const it of next) {
     const b = document.createElement("button");
@@ -214,13 +279,42 @@ function showMore() {
   $("#grid").appendChild(frag);
   state.shown += next.length;
 }
-new IntersectionObserver((e) => { if (e[0].isIntersecting && state.shown < state.list.length) showMore(); }, { rootMargin: "600px" })
+let remoteLoading = false;
+async function loadRemote(token = listToken) {
+  const s = state.source;
+  if (!s.remote || state.remoteDone || remoteLoading) return;
+  remoteLoading = true;
+  try {
+    const r = await s.page(state.q, state.remoteOffset);
+    if (token !== listToken) return;
+    state.list.push(...r.items);
+    state.remoteOffset += r.items.length;
+    state.remoteDone = r.done;
+    showMore();
+    if (!state.list.length) { $("#empty").hidden = false; $("#empty").textContent = "Nichts gefunden."; }
+  } catch (e) {
+    if (token !== listToken) return;
+    state.remoteDone = true;
+    $("#empty").hidden = false;
+    $("#empty").textContent = e instanceof TypeError
+      ? `${s.name} ist vom Browser aus nicht erreichbar (keine Freigabe des Servers oder offline).`
+      : e.message;
+  } finally {
+    remoteLoading = false;
+  }
+}
+
+new IntersectionObserver((e) => {
+  if (!e[0].isIntersecting) return;
+  if (state.shown < state.list.length) showMore();
+  else if (state.source?.remote) loadRemote();
+}, { rootMargin: "600px" })
   .observe($("#sentinel"));
 
 let searchTimer;
 $("#search").addEventListener("input", (e) => {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => { state.q = e.target.value.trim(); refreshList(); }, 250);
+  searchTimer = setTimeout(() => { state.q = e.target.value.trim(); refreshList(); }, state.source?.remote ? 700 : 250);
 });
 
 // ---------------------------------------------------------------- Hinzufügen
@@ -273,6 +367,7 @@ async function renderPreview() {
     const r = await render(blob, {
       width: board.info?.width ?? 32, height: board.info?.height ?? 32,
       mode: state.fit, pixelart: it.pixelart, maxFrames: settings.get("maxFrames", 64), frameMs: it.frameMs,
+      trim: it.trim !== false && it.pixelart, minFrameMs: settings.get("minFrameMs", 50),
     });
     if (token !== renderToken) return;
     rendered = r;
@@ -280,7 +375,7 @@ async function renderPreview() {
     img.dataset.url = URL.createObjectURL(new Blob([r.bytes], { type: r.mime }));
     img.src = img.dataset.url;
     img.onload = () => { $("#pvSpin").hidden = true; img.style.opacity = 1; };
-    $("#pvSrc").textContent = `${state.source.name} · ${r.isGif ? r.frames + " Frames" : "Standbild"} · ${(r.bytes.length / 1024).toFixed(1)} KB`;
+    $("#pvSrc").textContent = `${state.source.name} · ${r.isGif ? `${r.frames} Frames · ${r.fps.toFixed(0)} fps` : "Standbild"} · ${(r.bytes.length / 1024).toFixed(1)} KB`;
   } catch (e) {
     if (token === renderToken) $("#pvSpin").textContent = "Fehler";
     toast(e.message || String(e), "err");
@@ -442,6 +537,14 @@ $("#chunkSize").value = String(board.chunkSize);
 $("#chunkSize").onchange = (e) => { board.chunkSize = +e.target.value; settings.set("chunk", board.chunkSize); };
 $("#idleMin").value = String(board.idleMinutes);
 $("#idleMin").onchange = (e) => { board.idleMinutes = +e.target.value; settings.set("idle", board.idleMinutes); };
+$("#giphyKey").value = settings.get("giphyKey", "");
+$("#giphyKey").onchange = (e) => {
+  settings.set("giphyKey", e.target.value.trim());
+  toast(e.target.value.trim() ? "GIPHY-Key gespeichert" : "GIPHY-Key entfernt", "ok");
+  if (state.source?.id === "giphy") refreshList();
+};
+$("#minFrameMs").value = String(settings.get("minFrameMs", 50));
+$("#minFrameMs").onchange = (e) => { settings.set("minFrameMs", +e.target.value); if (state.item) renderPreview(); };
 $("#maxFrames").value = String(settings.get("maxFrames", 64));
 $("#maxFrames").onchange = (e) => settings.set("maxFrames", +e.target.value);
 

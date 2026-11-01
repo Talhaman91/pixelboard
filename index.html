@@ -129,6 +129,17 @@
       <option value="10">10 Minuten</option>
       <option value="0">nie</option>
     </select>
+    <label class="field">Bildrate begrenzen (wenn GIFs auf dem Board zu langsam laufen)</label>
+    <select class="input" id="minFrameMs">
+      <option value="0">aus (Original)</option>
+      <option value="40">max. 25 Bilder/s</option>
+      <option value="50">max. 20 Bilder/s (Standard)</option>
+      <option value="66">max. 15 Bilder/s</option>
+      <option value="100">max. 10 Bilder/s</option>
+    </select>
+    <label class="field">GIPHY-API-Key (für die GIPHY-Suche)</label>
+    <input class="input" id="giphyKey" placeholder="kostenlos auf developers.giphy.com" autocomplete="off" spellcheck="false">
+    <p class="small" style="margin:6px 0 0">Wird nur auf diesem Gerät gespeichert. Key holen: <a href="https://developers.giphy.com/dashboard/" target="_blank" rel="noopener" style="color:var(--muted)">developers.giphy.com</a> → Create an App → API.</p>
     <label class="field">Max. Frames pro GIF</label>
     <select class="input" id="maxFrames">
       <option value="32">32</option>
