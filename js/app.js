@@ -422,7 +422,7 @@ $("#sendBtn").onclick = async () => {
     if (!rendered) throw new Error("Bild konnte nicht vorbereitet werden");
     const t0 = performance.now();
     setProgress(0);
-    await board.send(P.imagePlan(rendered.bytes, rendered.isGif), setProgress);
+    await board.send(P.imagePlan(rendered.bytes, rendered.isGif, settings.get("saveSlot", 1)), setProgress);
     return ((performance.now() - t0) / 1000).toFixed(1);
   }, (s) => `Gesendet (${s} s)`);
   setProgress(null);
@@ -507,7 +507,7 @@ $("#txtSend").onclick = () => {
     const enc = await encodeText(text, { height: h, color, font: $("#txtFont").value, reverse: anim === 2 });
     if (!enc.count) throw new Error("Nichts zu senden");
     const props = P.textProperties(anim, +$("#txtSpeed").value, +$("#txtRainbow").value, color);
-    await board.send(P.textPlan(enc.blocks, enc.count, props));
+    await board.send(P.textPlan(enc.blocks, enc.count, props, settings.get("saveSlot", 1)));
   }, "Text gesendet");
 };
 
@@ -545,6 +545,20 @@ $("#giphyKey").onchange = (e) => {
 };
 $("#minFrameMs").value = String(settings.get("minFrameMs", 50));
 $("#minFrameMs").onchange = (e) => { settings.set("minFrameMs", +e.target.value); if (state.item) renderPreview(); };
+$("#saveSlot").value = String(settings.get("saveSlot", 1));
+$("#saveSlot").onchange = (e) => settings.set("saveSlot", +e.target.value);
+$("#showSlotBtn").onclick = () => withBusy(async () => {
+  await ensureDevice();
+  const n = settings.get("saveSlot", 1) || 1;
+  await board.send(P.showSlotCommand(n));
+}, "Gespeicherter Inhalt angezeigt");
+$("#clearSlotsBtn").onclick = () => {
+  if (!confirm("Alle auf dem Board gespeicherten Bilder/Texte (Plätze 1–10) löschen? Auch die aus der iPixel-App.")) return;
+  withBusy(async () => {
+    await ensureDevice();
+    for (let n = 1; n <= 10; n++) await board.send(P.deleteSlotCommand(n));
+  }, "Speicherplätze gelöscht");
+};
 $("#maxFrames").value = String(settings.get("maxFrames", 64));
 $("#maxFrames").onchange = (e) => settings.set("maxFrames", +e.target.value);
 

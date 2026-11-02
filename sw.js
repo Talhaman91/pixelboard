@@ -1,6 +1,6 @@
 // Einfacher Offline-Cache für die App-Hülle. Bilder aus den Quellen werden zusätzlich
 // beim Ansehen zwischengespeichert, damit Favoriten auch ohne Netz laden.
-const VERSION = "pixelboard-v3";
+const VERSION = "pixelboard-v4";
 const SHELL = [
   "./", "index.html", "style.css", "manifest.json", "icon.svg", "sources_index.json",
   "icon-192.png", "icon-512.png",

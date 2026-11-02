@@ -168,3 +168,10 @@ export function classifyAck(data) {
   if (data[4] === 3) return "final";
   return null;
 }
+
+// ---------------------------------------------------------------- Speicherplätze
+export const showSlotCommand = (n) => singleWindowPlan("show_slot", [0x07, 0x00, 0x08, 0x80, 0x01, 0x00, n & 0xff]);
+export function deleteSlotCommand(n) {
+  if (n < 0 || n > 255) throw new Error("Slot 0–255");
+  return singleWindowPlan("delete_slot", [7, 0, 2, 1, 1, 0, n & 0xff]);
+}

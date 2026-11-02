@@ -113,6 +113,24 @@
     </div>
     <p class="small mono" id="connInfo" style="margin:12px 0 0;white-space:pre-line"></p>
   </div>
+  <div class="card">
+    <h3>Nach dem Einschalten</h3>
+    <label class="field">Gesendetes dauerhaft auf dem Board speichern</label>
+    <select class="input" id="saveSlot">
+      <option value="0">nicht speichern (nur anzeigen)</option>
+      <option value="1" selected>speichern in Platz 1 (Standard)</option>
+      <option value="2">speichern in Platz 2</option>
+      <option value="3">speichern in Platz 3</option>
+    </select>
+    <p class="small" style="margin:8px 0 12px">
+      Gespeichertes erscheint wieder, wenn das Board Strom bekommt. Liegen mehrere Plätze voll,
+      wechselt das Board zwischen ihnen – dann alte Inhalte löschen.
+    </p>
+    <div class="pill-row">
+      <button class="btn" id="showSlotBtn">Gespeichertes zeigen</button>
+      <button class="btn danger" id="clearSlotsBtn">Alle Plätze leeren</button>
+    </div>
+  </div>
   <details class="card">
     <summary>Erweitert</summary>
     <label class="field">Paketgröße (bei Übertragungsfehlern verkleinern)</label>
